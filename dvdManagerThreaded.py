@@ -7,6 +7,19 @@ backupLocation = "/hdd/"
 minTime = 60*60 # this is in seconds; so it reads for parts that are larger then 1 hour by default
 refreshTrayTimerTime = 60 * 3 # This is in seconds; used for solving auto closing dvd trays
 
+textColorDatabase = [
+	'\x1b[0;30;41m',
+	'\x1b[0;30;42m',
+	'\x1b[0;30;43m',
+	'\x1b[0;30;44m',
+	'\x1b[0;30;45m',
+	'\x1b[0;30;46m',
+	'\x1b[0;30;47m',
+	'\x1b[0m',
+]
+
+def printColor(text, number):
+	print(textColorDatabase[number] + text + textColorDatabase[len(textColorDatabase)-1])
 
 def _isTrayHelper(dvdLocation, lookingText):
 	# used as base for all tray status functions
@@ -43,7 +56,7 @@ def waitUntilReady(dvdLocation):
 		time.sleep(1)
 		notReady = isTrayNotReady(dvdLocation)
 
-def refreshTrayTime(dvdLocation):
+def refreshTrayTime(dvdLocation, childCount):
 	# toggle the tray state twice at given dvdlocation
 	# this is used as a way to reset the auto close time
 	# when the tray is openned
@@ -53,7 +66,7 @@ def refreshTrayTime(dvdLocation):
 		time.sleep(10)
 		os.popen("eject {}".format(dvdLocation))
 	else:
-		print("{} attempted to refresh tray time while not being opened".format(dvdLocation))
+		printColor("{} attempted to refresh tray time while not being opened".format(dvdLocation), childCount)
 
 def openTray(dvdLocation):
 	# open the dvd tray at the given location
@@ -63,23 +76,23 @@ def closeTray(dvdLocation):
 	# close the dvd tray at the given location
 	os.popen("eject -t {}".format(dvdLocation))
 
-def dvdTester(dvdLocation):
+def dvdTester(dvdLocation, childCount):
 	# This is a testing function used for debuging the tray
 	if isTrayOpen(dvdLocation):
-		print("{} is Open".format(dvdLocation))
+		printColor("{} is Open".format(dvdLocation), childCount)
 	if isTrayEmpty(dvdLocation):
-		print("{} is Empty".format(dvdLocation))
+		printColor("{} is Empty".format(dvdLocation), childCount)
 	if isTrayNotReady(dvdLocation):
-		print("{} is Not Ready".format(dvdLocation))
+		printColor("{} is Not Ready".format(dvdLocation), childCount)
 		waitUntilReady(dvdLocation)
 		if isTrayEmpty(dvdLocation):
-			print("{} is Empty".format(dvdLocation))
+			printColor("{} is Empty".format(dvdLocation), childCount)
 		elif isTrayHaveDVD(dvdLocation):
-			print("{} is Open".format(dvdLocation))
+			printColor("{} is Open".format(dvdLocation), childCount)
 		else:
-			print("{} is Unknown state".format(dvdLocation))
+			printColor("{} is Unknown state".format(dvdLocation), childCount)
 	if isTrayHaveDVD(dvdLocation):
-		print("{} is Full".format(dvdLocation))
+		printColor("{} is Full".format(dvdLocation), childCount)
 
 def getDVDName(dvdLocation):
 	# This gets the dvd name from the Volume name on the given location
@@ -94,22 +107,22 @@ def getDVDName(dvdLocation):
 				volumeName = str(line.rstrip()).split('Volume name:')[1].replace(' ','').replace("'",'')
 		return volumeName
 
-def refreshTrayTimeTimerHelper(dvdLocation):
+def refreshTrayTimeTimerHelper(dvdLocation, childCount):
 	# This is used to assist in the timer callback function
 	# it has a bit of logic so that it doesn't just break things
 	waitUntilReady(dvdLocation)
 	if isTrayEmpty(dvdLocation):
-		print('timer {} found an empty tray'.format(dvdLocation))
+		printColor('timer {} found an empty tray'.format(dvdLocation), childCount)
 		openTray(dvdLocation)
 	elif isTrayHaveDVD(dvdLocation):
-		print('timer {} found a dvd in tray'.format(dvdLocation))
+		printColor('timer {} found a dvd in tray'.format(dvdLocation), childCount)
 		return
 	elif isTrayOpen(dvdLocation):
-		refreshTrayTime(dvdLocation)
+		refreshTrayTime(dvdLocation, childCount)
 
-def setRefreshTrayTimer(dvdLocation):
+def setRefreshTrayTimer(dvdLocation, childCount):
 	# This is used as a way to start new timer threads
-	t1 = threading.Timer(refreshTrayTimerTime, refreshTrayTimeTimerHelper, [dvdLocation])
+	t1 = threading.Timer(refreshTrayTimerTime, refreshTrayTimeTimerHelper, [dvdLocation, childCount])
 	t1.start()
 	return t1
 
@@ -131,51 +144,53 @@ def getMakeMKVDiscNumber(dvdLocation):
 				foundNumber = str(str(line)[2:-2].split(',')[0].split(':')[1])
 	return int(foundNumber)
 
-def ripperHelper(dvdLocation, ripperFolder):
+def ripperHelper(dvdLocation, ripperFolder, childCount):
 	# This is used as a way to simplify the ripperLogic function
 	if os.path.isdir(ripperFolder):
-		print("ERROR: ripperHelper: {} rip location already exists".format(dvdLocation))
+		printColor("ERROR: ripperHelper: {} rip location already exists".format(dvdLocation), childCount)
 		return
 	
 	os.mkdir(ripperFolder)
 	driveNumber = getMakeMKVDiscNumber(dvdLocation)
 	if driveNumber == -1:
-		print("ERROR: ripperHelper: {} could not find driveNumber".format(dvdLocation))
+		printColor("ERROR: ripperHelper: {} could not find driveNumber".format(dvdLocation), childCount)
 		return
 	
 	cmd = ["makemkvcon", "mkv", "disc:{}".format(driveNumber), "all", "{}".format(ripperFolder), "--minlength={}".format(minTime)]
-	print(cmd)
-	p = subprocess.run(cmd, capture_output=True)
-	
-	print('{} finished Ripping at {}'.format(dvdLocation, ripperFolder))
 
-def ripperLogic(dvdLocation):
+	with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as p:
+		for line in p.stdout:
+			printColor(line.decode("utf-8"), childCount)
+	p_status = p.wait()
+	printColor('{} finished Ripping at {}'.format(dvdLocation, ripperFolder), childCount)
+
+def ripperLogic(dvdLocation, childCount):
 	# This is used to attempt to rip a dvd from a disc tray
 	dvdName = getDVDName(dvdLocation)
 	ripperFolder = backupLocation+dvdName
 	if dvdName == "":
-		print("ERROR: ripperLogic: {} could not find dvdName".format(dvdLocation))
+		printColor("ERROR: ripperLogic: {} could not find dvdName".format(dvdLocation), childCount)
 		return
-	print("{} starting rip at {}".format(dvdLocation, ripperFolder))
+	printColor("{} starting rip at {}".format(dvdLocation, ripperFolder), childCount)
 	
-	ripperHelper(dvdLocation, ripperFolder)
+	ripperHelper(dvdLocation, ripperFolder, childCount)
 	openTray(dvdLocation)
 
-def threadedRipperMain(dvdLocation, startTimeDelay):
+def threadedRipperMain(dvdLocation, startTimeDelay, childCount):
 	# This is the main logic of each dvd tray thread used for ripping
 	time.sleep(startTimeDelay)
-	t1 = setRefreshTrayTimer(dvdLocation)
+	t1 = setRefreshTrayTimer(dvdLocation, childCount)
 	
 	while True:
 		time.sleep(1)
 		if t1.is_alive() is False:
-			t1 = setRefreshTrayTimer(dvdLocation)
+			t1 = setRefreshTrayTimer(dvdLocation, childCount)
 		if isTrayHaveDVD(dvdLocation):
 			t1.cancel()
-			print('found DVD in {}'.format(dvdLocation))
-			ripperLogic(dvdLocation)
+			printColor('found DVD in {}'.format(dvdLocation),childCount)
+			ripperLogic(dvdLocation, childCount)
 			
-			t1 = setRefreshTrayTimer(dvdLocation)
+			t1 = setRefreshTrayTimer(dvdLocation, childCount)
 		if isTrayEmpty(dvdLocation):
 			openTray(dvdLocation)
 
@@ -189,12 +204,14 @@ def main():
 	
 	runningProcesses = []
 	delayTime = 0
+	childNumber = 0
 	for dvd in dvdList:
 		# start with the tray open
 		openTray(dvd)
 		# prep the multiprocessing 
-		runningProcesses.append( Process(target=threadedRipperMain, args=(dvd, delayTime)) )
+		runningProcesses.append( Process(target=threadedRipperMain, args=(dvd, delayTime, childNumber)) )
 		delayTime = delayTime + 10
+		childNumber = childNumber + 1
 	
 	for i in runningProcesses:
 		# start the multi procossing

@@ -1,15 +1,25 @@
 from multiprocessing import Process
 import time, random
+class bcolors:
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKCYAN = '\033[96m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
+    BOLD = '\033[1m'
+    UNDERLINE = '\033[4m'
 def func1():
-	print ('func1: starting')
+	print (bcolors.OKBLUE + 'func1: starting' + bcolors.ENDC)
 	for i in range(10000000): pass
-	print ('func1: finishing')
+	print (bcolors.OKBLUE + 'func1: finishing' + bcolors.ENDC)
 
 def func2(test):
-	print(test)
-	print ('func2: starting')
+	print(bcolors.OKGREEN + test + bcolors.ENDC)
+	print(bcolors.OKGREEN + 'func2: starting' + bcolors.ENDC)
 	time.sleep(random.randrange(4)) #for i in range(10000000): pass
-	print ('func2: finishing')
+	print(bcolors.OKGREEN + 'func2: finishing' + bcolors.ENDC)
 
 list1 = []
 workingList = []
